@@ -1,0 +1,25 @@
+[package]
+name = "lmux"
+description = ""
+keywords = ["struct", "borrow", "partial", "fields", "references"]
+version = {workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+repository = {workspace = true}
+
+[lib]
+
+[dependencies]
+crossterm = "0.29"
+anyhow = "1"
+indexmap = "2.9"
+derive_more = { version = "2",  features = ["deref", "deref_mut"]}
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
+
+[lints]
+workspace = true
+
+[features]
