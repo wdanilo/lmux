@@ -36,8 +36,8 @@ impl Status {
         Self { progress, finished, tag }
     }
 
-    pub const fn progress(self, progress: f32) -> Self {
-        Self { progress: Some(progress), ..self }
+    pub fn progress(self, progress: impl Into<Option<f32>>) -> Self {
+        Self { progress: progress.into(), ..self }
     }
 
     pub const fn finished(self) -> Self {

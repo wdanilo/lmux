@@ -131,6 +131,11 @@ impl Logger {
         Ok(())
     }
 
+    pub fn get_last_line(&mut self, selector: impl GroupSelector) -> Result<Option<&Log>> {
+        let group_id = GroupSelector::group_id(selector, self)?;
+        Ok(self.groups[*group_id].lines.last().map(|l| &l.log))
+    }
+
     pub fn shift_selection(&mut self, shift: isize) {
         let mut groups = self.groups.nonempty_mut();
         if !groups.is_empty() {
@@ -373,13 +378,24 @@ fn report_errors<T>(result: Result<T>) {
     }
 }
 
-pub fn log_helper(selector: impl GroupStringSelector, log: Log) -> Result {
+pub fn push_log_helper(selector: impl GroupStringSelector, log: Log) -> Result {
     selector.with_selector(|sel|
         modify_logger(|l| {
             l.create_group(sel);
             l.push_line(sel, log)
         })?
     )
+}
+
+pub fn log_helper2(selector: &[String], status: Option<Status>, log: String) -> Result {
+    let last_log_status =
+        modify_logger(|l| {
+            l.create_group(selector);
+            l.get_last_line(selector).map(|t| t.map(|s| s.status))
+        })??;
+    let status = status.or_else(|| last_log_status).unwrap_or_default();
+    push_log(selector, Log { status, content: log.into() });
+    Ok(())
 }
 
 pub fn set_header_helper(selector: impl GroupStringSelector, s: impl Into<String>) -> Result {
@@ -393,16 +409,26 @@ pub fn debug(log: impl Into<String>) {
     report_errors(modify_logger(|logger| logger.debug_lines.push(log.into())))
 }
 
-pub fn log(selector: impl GroupStringSelector, status: Status, log: impl Into<String>) {
-    push_log(selector, Log { status, content: log.into() });
+pub fn log(selector: impl GroupStringSelector, status: impl Into<Option<Status>>, log: impl Into<String>) {
+    selector.with_selector(|sel| report_errors(log_helper2(sel, status.into(), log.into())))
 }
 
 pub fn push_log(selector: impl GroupStringSelector, log: Log) {
-    report_errors(log_helper(selector, log))
+    report_errors(push_log_helper(selector, log))
 }
 
 pub fn set_header(selector: impl GroupStringSelector, s: impl Into<String>) {
     report_errors(set_header_helper(selector, s))
+}
+
+#[macro_export]
+macro_rules! log {
+    ($sel:expr, $msg:literal $($ts:tt)*) => {
+        $crate::log($sel, None, format!($msg $($ts)*))
+    };
+    ($sel:expr, $status:expr, $msg:literal $($ts:tt)*) => {
+        $crate::log($sel, $status, format!($msg $($ts)*))
+    };
 }
 
 // ============

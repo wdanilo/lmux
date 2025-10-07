@@ -92,7 +92,7 @@ async fn main() {
                 sleep(Duration::from_millis(cfg.start_delay)).await;
                 for line in 1..=cfg.lines {
                     let status = (cfg.line_status)(&cfg, line);
-                    lmux::log(&id, status, format!("Output line {line}"));
+                    lmux::log(&id, Some(status), format!("Output line {line}"));
                     let is_last_line = line == cfg.lines;
                     if !is_last_line {
                         sleep(Duration::from_millis(cfg.line_delay)).await;
