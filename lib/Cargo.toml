@@ -1,6 +1,6 @@
 [package]
 name = "lmux"
-description = ""
+description = { workspace = true }
 keywords = []
 version = {workspace = true }
 authors = { workspace = true }
