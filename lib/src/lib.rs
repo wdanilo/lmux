@@ -92,6 +92,7 @@ pub struct Logger {
     frame_buffer: framebuffer::Framebuffer,
     debug_lines: Vec<String>,
     history: Vec<(group::Id, group::StatusTag)>,
+    disabled: bool,
 }
 
 impl Logger {
@@ -125,9 +126,13 @@ impl Logger {
         let group_id = GroupSelector::group_id(selector, self)?;
         let time = SystemTime::now();
         let timestamp = self.next_line_id();
+        let group = &mut self.groups[*group_id];
+        if self.disabled {
+            println!("[{}] {}", group.header, log.content)
+        }
         self.history.push((group_id, log.status.tag));
         let line = group::Line { timestamp, time, log };
-        self.groups[*group_id].lines.push(line);
+        group.lines.push(line);
         Ok(())
     }
 
@@ -387,7 +392,7 @@ pub fn push_log_helper(selector: impl GroupStringSelector, log: Log) -> Result {
     )
 }
 
-pub fn log_helper2(selector: &[String], status: Option<Status>, log: String) -> Result {
+pub fn log_helper(selector: &[String], status: Option<Status>, log: String) -> Result {
     let last_log_status =
         modify_logger(|l| {
             l.create_group(selector);
@@ -410,7 +415,7 @@ pub fn debug(log: impl Into<String>) {
 }
 
 pub fn log(selector: impl GroupStringSelector, status: impl Into<Option<Status>>, log: impl Into<String>) {
-    selector.with_selector(|sel| report_errors(log_helper2(sel, status.into(), log.into())))
+    selector.with_selector(|sel| report_errors(log_helper(sel, status.into(), log.into())))
 }
 
 pub fn push_log(selector: impl GroupStringSelector, log: Log) {
@@ -435,45 +440,50 @@ macro_rules! log {
 // === Main ===
 // ============
 
-pub fn main() -> Result {
-    let error: Arc<Mutex<Option<String>>> = default();
-    let error2 = error.clone();
-    std::panic::set_hook(Box::new(move |info| {
-        let mut err = String::new();
-        if let Some(location) = info.location() {
-            let file = location.file();
-            let line = location.line();
-            let column = location.column();
-            err.push_str(&format!("At: {file}:{line}:{column}\n"));
-        }
+pub fn main(enabled: bool) -> Result {
+    if enabled {
+        let error: Arc<Mutex<Option<String>>> = default();
+        let error2 = error.clone();
+        std::panic::set_hook(Box::new(move |info| {
+            let mut err = String::new();
+            if let Some(location) = info.location() {
+                let file = location.file();
+                let line = location.line();
+                let column = location.column();
+                err.push_str(&format!("At: {file}:{line}:{column}\n"));
+            }
 
-        err.push_str("Message: ");
-        if let Some(msg) = info.payload().downcast_ref::<&'static str>() {
-            err.push_str(&format!("{msg}\n"));
-        } else if let Some(msg) = info.payload().downcast_ref::<String>() {
-            err.push_str(&format!("{msg}\n"));
-        } else {
-            err.push_str("<non-string panic payload>\n");
-        }
-        if let Ok(mut t) = error2.lock() {
-            *t = Some(err);
-        }
-    }));
+            err.push_str("Message: ");
+            if let Some(msg) = info.payload().downcast_ref::<&'static str>() {
+                err.push_str(&format!("{msg}\n"));
+            } else if let Some(msg) = info.payload().downcast_ref::<String>() {
+                err.push_str(&format!("{msg}\n"));
+            } else {
+                err.push_str("<non-string panic payload>\n");
+            }
+            if let Ok(mut t) = error2.lock() {
+                *t = Some(err);
+            }
+        }));
 
-    terminal::capture()?;
-    let result = std::panic::catch_unwind(run);
-    terminal::cleanup()?;
+        terminal::capture()?;
+        let result = std::panic::catch_unwind(run);
+        terminal::cleanup()?;
 
-    result.unwrap_or_else(move |_| {
-        let locked_err = error.lock();
-        let msg = locked_err
-            .as_ref()
-            .map(|t| t.as_ref().map(|t| t.as_str()))
-            .ok()
-            .flatten()
-            .unwrap_or("unknown panic (no message captured)");
-        Err(anyhow!("Panic occurred: {msg}"))
-    })
+        result.unwrap_or_else(move |_| {
+            let locked_err = error.lock();
+            let msg = locked_err
+                .as_ref()
+                .map(|t| t.as_ref().map(|t| t.as_str()))
+                .ok()
+                .flatten()
+                .unwrap_or("unknown panic (no message captured)");
+            Err(anyhow!("Panic occurred: {msg}"))
+        })
+    } else {
+        modify_logger(|logger| logger.disabled = true)?;
+        Ok(())
+    }
 }
 
 pub fn run() -> Result {

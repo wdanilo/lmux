@@ -79,7 +79,7 @@ fn tasks() -> Vec<TaskConfig> {
 #[tokio::main]
 async fn main() {
     let tui_handle = tokio::task::spawn_blocking(|| {
-        let out = lmux::main();
+        let out = lmux::main(true);
         println!("Result: {out:?}")
     });
 
